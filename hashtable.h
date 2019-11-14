@@ -6,43 +6,44 @@
 #define TEXT_1 1
 #define TEXT_2 2
 #define MAX_WORD 50
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 struct Word {
     char key[MAX_WORD];
-    int count;
+    int count1;
+    int count2;
+    double ll; // the log likelihood
     UT_hash_handle hh;
 };
 
-struct Word* words1 = NULL;
-struct Word* words2 = NULL;
+struct Word* words = NULL;
 
 void add_word(int table_num, char* word, int count) {
     struct Word* w;
     w = (struct Word*) malloc(sizeof *w);
     strcpy(w->key, word);
-    w->count = count;
     if (table_num == TEXT_1) {
-        HASH_ADD_STR(words1, key, w);
+        HASH_ADD_STR(words, key, w);
+        w->count1 = count;
+        w->count2 = 0;
     }
     else {
-        HASH_ADD_STR(words2, key, w);
+        HASH_ADD_STR(words, key, w);
+        w->count2 = count;
+        w->count1 = 0;
     }
+    w->ll = 0;
 }
 
-struct Word* get_count(int table_num, char* word) {
+struct Word* get_count(char* word) {
     struct Word* entry;
-    if (table_num == TEXT_1) {
-        HASH_FIND_STR(words1, word, entry);
-    }
-    else {
-        HASH_FIND_STR(words2, word, entry);
-    }
+    HASH_FIND_STR(words, word, entry);
     return entry;
 }
 
 void add_count(int table_num, char* word) {
     struct Word* w;
-    w = get_count(table_num, word);
+    w = get_count(word);
 
     // if the word does not exist in the hashtable
     if (w == NULL) {
@@ -50,27 +51,28 @@ void add_count(int table_num, char* word) {
         add_word(table_num, word, 1);
     }
     else {
-        w->count += 1; // increment current value by one
+        // increment current value by one
+        if (table_num == TEXT_1) {
+            w->count1 += 1;
+        }
+        else {
+            w->count2 += 1;
+        }
     }
 }
 
 int sort_by_count(struct Word* w1, struct Word* w2) {
-    int w1_count = w1->count;
-    int w2_count = w2->count;
+    int w1_count = w1->ll;
+    int w2_count = w2->ll;
 
     if (w1_count < w2_count) {
-        return -1;
+        return 1;
     }
-    return 1;
+    return -1;
 }
 
-void sort(int table_num) {
-    if (table_num == TEXT_1) {
-        HASH_SORT(words1, sort_by_count);
-    }
-    else {
-        HASH_SORT(words2, sort_by_count);
-    }
+void sort() {
+    HASH_SORT(words, sort_by_count);
 }
 
 #endif /* htable_H */

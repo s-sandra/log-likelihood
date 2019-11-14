@@ -22,6 +22,21 @@ void Pthread_join(pthread_t thread, void** retval) {
     assert(thr == 0);
 }
 
+void Pthread_rwlock_init(pthread_rwlock_t* lock, const pthread_rwlockattr_t* attr) {
+    int lck = pthread_rwlock_init(lock, attr);
+    assert(lck == 0);
+}
+
+void Pthread_rwlock_unlock(pthread_rwlock_t* lock) {
+    int lck = pthread_rwlock_unlock(lock);
+    assert(lck == 0);
+}
+
+void Pthread_rwlock_wrlock(pthread_rwlock_t* lock) {
+    int lck = pthread_rwlock_wrlock(lock);
+    assert(lck == 0);
+}
+
 void Pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr) {
     int mtx = pthread_mutex_init(mutex, attr);
     assert(mtx == 0);
