@@ -4,10 +4,7 @@ FLAGS = -Wall -Werror -pthread -O -lm
 all: log_likelihood
 
 clean:
-	rm *.o log_likelihood
+	rm log_likelihood
 
-log_likelihood: log_likelihood.c threads.h hashtable.h rb_tree
-	gcc -o log_likelihood log_likelihood.c $(FLAGS)
-
-rb_tree: rb_tree.c rb_tree.h
-	gcc -c rb_tree.c
+log_likelihood: log_likelihood.c
+	gcc -DHASH_FUNCTION=HASH_OAT -o log_likelihood log_likelihood.c $(FLAGS)

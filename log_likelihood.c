@@ -37,11 +37,15 @@ int** make_contingency_table(struct Word* word);
 void init_file(struct File* text, char* name, int id);
 void parse_word(struct File* file);
 void* parse_text(void* file);
+void* compute_log_likelihood();
 int compare_by_likelihood(struct rb_tree* self, struct rb_node* w1, struct rb_node* w2);
 
 struct File text1;
 struct File text2;
+struct rb_tree* sorted;
+struct Word* word;
 pthread_rwlock_t write_lock;
+pthread_mutex_t log_lock;
 int THREAD_COUNT;
 int CUTOFF = 35;
 
@@ -55,7 +59,7 @@ int main(int argc, char** argv) {
     init_file(&text2, argv[2], TEXT_2);
     Pthread_rwlock_init(&write_lock, NULL);
 
-    THREAD_COUNT = (get_nprocs_conf() / 2 == 0) ? 50 : get_nprocs_conf() / 2;
+    THREAD_COUNT = (get_nprocs_conf() / 2 == 0) ? 1 : get_nprocs_conf() / 2;
     pthread_t text1_threads[THREAD_COUNT];
     pthread_t text2_threads[THREAD_COUNT];
 
@@ -150,28 +154,27 @@ void print_table() {
     printf("Word,%s count,%s count,%s freq,%s freq,Log Likelihood\n", 
         text1.name, text2.name, text1.name, text2.name);
     
-    struct Word* w;
-    struct rb_tree* sorted = rb_tree_create(compare_by_likelihood);
+    sorted = rb_tree_create(compare_by_likelihood);
+    Pthread_mutex_init(&log_lock, NULL);
+    pthread_t log_threads[THREAD_COUNT * 2];
+    word = words;
 
-    // computes log likelihood
-    for (w = words; w != NULL; w = w->hh.next) {
-        if (text1.word_count > CUTOFF && text2.word_count > CUTOFF && 
-            (w->count1 > CUTOFF || w->count2 > CUTOFF)) {
-            double g2 = log_likelihood(w);
-            w->ll = g2;
-            rb_tree_insert(sorted, w);
-        }
+    for (int thread = 0; thread < THREAD_COUNT * 2; thread++) {
+        Pthread_create(&log_threads[thread], NULL, compute_log_likelihood, NULL);
     }
 
-    //sort(words);
+    for (int thread = 0; thread < THREAD_COUNT * 2; thread++) {
+        Pthread_join(log_threads[thread], NULL);
+    }
+
     struct rb_iter* iterator = rb_iter_create();
-    for (w = rb_iter_first(iterator, sorted); w != NULL; w = rb_iter_next(iterator)) {
-        printf("%s,", w->key);
-        printf("%d,", w->count1);
-        printf("%d,", w->count2);
-        printf("%0.5f,", (double) w->count1 / text1.word_count);
-        printf("%0.5f,", (double) w->count2 / text2.word_count);
-        printf("%0.5f\n", w->ll);
+    for (word = rb_iter_first(iterator, sorted); word != NULL; word = rb_iter_next(iterator)) {
+        printf("%s,", word->key);
+        printf("%d,", word->count1);
+        printf("%d,", word->count2);
+        printf("%0.5f,", (double) word->count1 / text1.word_count);
+        printf("%0.5f,", (double) word->count2 / text2.word_count);
+        printf("%0.5f\n", word->ll);
     }
 
     rb_iter_dealloc(iterator);
@@ -182,7 +185,33 @@ int compare_by_likelihood(struct rb_tree* self, struct rb_node* w1, struct rb_no
     struct Word* this = (struct Word*) w1->value;
     struct Word* other = (struct Word*) w2->value;
 
+    // if log likelihood values are identical, compare on words
+    if (this->ll == other->ll) {
+        return strcmp(this->key, other->key);
+    }
+
     return (this->ll < other->ll) - (this->ll > other->ll);
+}
+
+void* compute_log_likelihood() {
+    
+    while (1) {
+        Pthread_mutex_lock(&log_lock);
+        if (word == NULL) {
+            Pthread_mutex_unlock(&log_lock);
+            break;
+        }
+
+        if (text1.word_count <= CUTOFF || text2.word_count <= CUTOFF || 
+             word->count1 > CUTOFF || word->count2 > CUTOFF) {
+            double g2 = log_likelihood(word);
+            word->ll = g2;
+            rb_tree_insert(sorted, word);
+        }
+        word = word->hh.next;
+        Pthread_mutex_unlock(&log_lock);
+    }
+    return NULL;
 }
 
 /*

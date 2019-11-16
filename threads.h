@@ -5,12 +5,6 @@
 #include <assert.h>
 #include <stdlib.h>
 
-void* Malloc(size_t size) {
-    void* mem = malloc(size);
-    assert(mem != NULL);
-    return mem;
-}
-
 void Pthread_create(pthread_t* thread, const pthread_attr_t* attr, 	 
 		            void* (*func)(void*), void* arg) {
     int thr = pthread_create(thread, attr, func, arg);

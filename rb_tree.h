@@ -39,7 +39,7 @@
 #include <stdlib.h>
 
 #ifndef RB_ITER_MAX_HEIGHT
-#define RB_ITER_MAX_HEIGHT 64 // Tallest allowable tree to iterate
+#define RB_ITER_MAX_HEIGHT 65 // Tallest allowable tree to iterate
 #endif
 
 struct rb_node;
