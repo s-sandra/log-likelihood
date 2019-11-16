@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include "threads.h"
 #include "hashtable.h"
+#include "rb_tree.c"
 
 struct File {
     char* file;
@@ -36,11 +37,13 @@ int** make_contingency_table(struct Word* word);
 void init_file(struct File* text, char* name, int id);
 void parse_word(struct File* file);
 void* parse_text(void* file);
-int is_punctuation(char letter);
+int compare_by_likelihood(struct rb_tree* self, struct rb_node* w1, struct rb_node* w2);
 
 struct File text1;
 struct File text2;
 pthread_rwlock_t write_lock;
+int THREAD_COUNT;
+int CUTOFF = 35;
 
 int main(int argc, char** argv) {
     if (!argv[1] || !argv[2]) {
@@ -52,28 +55,18 @@ int main(int argc, char** argv) {
     init_file(&text2, argv[2], TEXT_2);
     Pthread_rwlock_init(&write_lock, NULL);
 
-    int free_cores = get_nprocs_conf();
+    THREAD_COUNT = (get_nprocs_conf() / 2 == 0) ? 50 : get_nprocs_conf() / 2;
+    pthread_t text1_threads[THREAD_COUNT];
+    pthread_t text2_threads[THREAD_COUNT];
 
-    // if there is more than one core available
-    if (free_cores == 1) {
-        int thread_division = 2;
-        pthread_t text1_threads[thread_division];
-        pthread_t text2_threads[thread_division];
-
-        for (int thread = 0; thread < thread_division; thread++) {
-            // NULL is the priority.
-            Pthread_create(&text1_threads[thread], NULL, parse_text, (void*) &text1);
-            Pthread_create(&text2_threads[thread], NULL, parse_text, (void*) &text2);
-        }
-
-        for (int thread = 0; thread < thread_division; thread++) {
-            Pthread_join(text1_threads[thread], NULL);
-            Pthread_join(text2_threads[thread], NULL);
-        }
+    for (int thread = 0; thread < THREAD_COUNT; thread++) {
+        Pthread_create(&text1_threads[thread], NULL, parse_text, (void*) &text1);
+        Pthread_create(&text2_threads[thread], NULL, parse_text, (void*) &text2);
     }
-    else { // run serially
-        parse_text(&text1);
-        parse_text(&text2);
+
+    for (int thread = 0; thread < THREAD_COUNT; thread++) {
+        Pthread_join(text1_threads[thread], NULL);
+        Pthread_join(text2_threads[thread], NULL);
     }
 
     print_table();
@@ -158,23 +151,38 @@ void print_table() {
         text1.name, text2.name, text1.name, text2.name);
     
     struct Word* w;
+    struct rb_tree* sorted = rb_tree_create(compare_by_likelihood);
+
     // computes log likelihood
     for (w = words; w != NULL; w = w->hh.next) {
-        double g2 = log_likelihood(w);
-        w->ll = g2;
+        if (text1.word_count > CUTOFF && text2.word_count > CUTOFF && 
+            (w->count1 > CUTOFF || w->count2 > CUTOFF)) {
+            double g2 = log_likelihood(w);
+            w->ll = g2;
+            rb_tree_insert(sorted, w);
+        }
     }
 
-    sort(words);
-    int top = 0;
-    for (w = words; w != NULL; w = w->hh.next) {
+    //sort(words);
+    struct rb_iter* iterator = rb_iter_create();
+    for (w = rb_iter_first(iterator, sorted); w != NULL; w = rb_iter_next(iterator)) {
         printf("%s,", w->key);
         printf("%d,", w->count1);
         printf("%d,", w->count2);
         printf("%0.5f,", (double) w->count1 / text1.word_count);
         printf("%0.5f,", (double) w->count2 / text2.word_count);
         printf("%0.5f\n", w->ll);
-        top++;
     }
+
+    rb_iter_dealloc(iterator);
+    rb_tree_dealloc(sorted, NULL);
+}
+
+int compare_by_likelihood(struct rb_tree* self, struct rb_node* w1, struct rb_node* w2) {
+    struct Word* this = (struct Word*) w1->value;
+    struct Word* other = (struct Word*) w2->value;
+
+    return (this->ll < other->ll) - (this->ll > other->ll);
 }
 
 /*

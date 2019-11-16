@@ -6,7 +6,6 @@
 #define TEXT_1 1
 #define TEXT_2 2
 #define MAX_WORD 50
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 struct Word {
     char key[MAX_WORD];
@@ -61,18 +60,18 @@ void add_count(int table_num, char* word) {
     }
 }
 
-int sort_by_count(struct Word* w1, struct Word* w2) {
-    int w1_count = w1->ll;
-    int w2_count = w2->ll;
+int sort_by_likelihood(struct Word* w1, struct Word* w2) {
+    int w1_log = w1->ll;
+    int w2_log = w2->ll;
 
-    if (w1_count < w2_count) {
+    if (w1_log < w2_log) {
         return 1;
     }
     return -1;
 }
 
 void sort() {
-    HASH_SORT(words, sort_by_count);
+    HASH_SORT(words, sort_by_likelihood);
 }
 
 #endif /* htable_H */
